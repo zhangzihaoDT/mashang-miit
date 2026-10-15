@@ -8,16 +8,25 @@ async function refreshReports() {
   const version = ++reportsTreeGeneration;
   const tree = node('div', '', 'file-tree');
   $('#count').textContent = 'reports/ · 报告文件';
+  $('#open-folder').disabled = false;
   async function populate(container, path) {
     const data = await api('library/tree?path=' + encodeURIComponent(path));
     if (version !== reportsTreeGeneration || scope !== 'reports') return;
+    if (path === 'reports') $('#reports-count').textContent = data.file_count;
     container.replaceChildren();
     if (!data.items.length) container.append(node('small', '空文件夹'));
     for (const file of data.items) {
       if (file.directory) {
         const details = document.createElement('details'), summary = node('summary', file.name);
         const children = node('div', '', 'folder-children');
-        details.append(summary, children); container.append(details);
+        summary.append(node('span', file.file_count, 'scope-count'));
+        const open = node('button', 'Finder 打开 ↗', 'folder-open');
+        open.onclick = async () => {
+          open.disabled = true;
+          try { await api('library/open-folder', {path:file.path}); notice('已在 Finder 中打开 ' + file.path); }
+          catch(e) {notice(e.message);} finally {open.disabled = false;}
+        };
+        details.append(summary, open, children); container.append(details);
         details.open = reportsExpanded.has(file.path);
         let loadPromise = null;
         const load = () => {

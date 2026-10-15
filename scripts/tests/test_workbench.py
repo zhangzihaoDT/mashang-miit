@@ -3,6 +3,7 @@ import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import patch
 from threading import Thread
 from http.server import ThreadingHTTPServer
 from urllib.request import Request, urlopen
@@ -110,9 +111,17 @@ def test_api_and_evidence(tmp_path):
                           headers=headers or ({'Content-Type': 'application/json'} if body else {}))
         return urlopen(request, timeout=5)
     try:
-        assert 'mashang-miit' in call('/').read().decode()
+        page = call('/').read().decode()
+        assert 'mashang-miit' in page and 'class="brand-icon"' in page
+        for asset, mime, magic in [('brand.png', 'image/png', b'\x89PNG'), ('favicon.gif', 'image/gif', b'GIF')]:
+            with call('/' + asset) as response:
+                assert response.headers['Content-Type'] == mime
+                assert response.read().startswith(magic)
         task = json.load(call('/api/miit/tasks', {'url': URL, 'idempotency_key': 'api'}))
         Worker(store, tmp_path / 'tasks', ARCHIVE).once()
+        with patch('workbench_library.subprocess.run') as run:
+            assert json.load(call('/api/miit/tasks/' + task['task_id'] + '/open-folder', {'open': True}))['ok']
+            assert run.call_args.args[0] == ['/usr/bin/open', '-a', 'Finder', str(tmp_path / 'tasks' / task['task_id'])]
         inbox = json.load(call('/api/miit/inbox'))
         candidate = json.load(call('/api/miit/candidates/' + inbox['items'][0]['candidate_id']))
         evidence = next(e for e in candidate['evidence'] if e['metadata']['kind'] == 'html')

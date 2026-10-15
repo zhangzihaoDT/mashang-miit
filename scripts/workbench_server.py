@@ -68,10 +68,10 @@ def handler(store, root):
                 if post and self.headers.get('Origin') not in (None, f'http://{host}'):
                     raise WorkbenchError('invalid_origin', '来源不受支持', 403)
                 path = urlsplit(self.path).path
-                if not post and path in {'/', '/app.js', '/library.js', '/vendor/markdown.js', '/styles.css', '/favicon.gif'}:
+                if not post and path in {'/', '/app.js', '/library.js', '/vendor/markdown.js', '/styles.css', '/favicon.gif', '/brand.png'}:
                     name = 'index.html' if path == '/' else path[1:]
-                    content_type = {'index.html': 'text/html', 'app.js': 'text/javascript', 'library.js': 'text/javascript', 'vendor/markdown.js': 'text/javascript', 'styles.css': 'text/css', 'favicon.gif': 'image/gif'}[name]
-                    if name == 'favicon.gif':
+                    content_type = {'index.html': 'text/html', 'app.js': 'text/javascript', 'library.js': 'text/javascript', 'vendor/markdown.js': 'text/javascript', 'styles.css': 'text/css', 'favicon.gif': 'image/gif', 'brand.png': 'image/png'}[name]
+                    if name in {'favicon.gif', 'brand.png'}:
                         return self.send((WORKBENCH_WEB_DIR / name).read_bytes(), content_type=content_type)
                     return self.send((WORKBENCH_WEB_DIR / name).read_bytes(), content_type=content_type + '; charset=utf-8')
                 body = {}
@@ -90,6 +90,8 @@ def handler(store, root):
                     return self.send(library.listing(library_path))
                 if not post and path == '/api/miit/library/preview':
                     return self.send(library.preview(library_path))
+                if post and path == '/api/miit/library/open-folder':
+                    return self.send(library.open_folder(body.get('path', '')))
                 if post and path == '/api/miit/library/open':
                     return self.send(library.open_local(body.get('path', '')))
                 prefix = '/api/miit/library/file/'
@@ -109,6 +111,13 @@ def handler(store, root):
                             raise WorkbenchError('unsupported_capture_type', '暂只支持正式公告批次')
                         return self.send(store.create(body.get('url'), body.get('idempotency_key')), 202)
                     return self.send({'items': store.tasks(), 'limit': 100})
+                folder_match = re.fullmatch(r'/api/miit/tasks/([0-9a-f]{32})/open-folder', path)
+                if post and folder_match:
+                    store.task(folder_match[1])
+                    folder = (root / folder_match[1]).resolve()
+                    if not folder.is_relative_to(root.resolve()) or (root / folder_match[1]).is_symlink():
+                        raise WorkbenchError('invalid_task_path', '任务目录无效', 403)
+                    return self.send(library.open_directory(folder))
                 match = re.fullmatch(r'/api/miit/tasks/([0-9a-f]{32})(/retry)?', path)
                 if match:
                     task = store.task(match[1])

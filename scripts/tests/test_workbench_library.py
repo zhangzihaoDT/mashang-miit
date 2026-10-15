@@ -73,3 +73,22 @@ def test_path_boundary_and_live_directory_refresh(tmp_path, monkeypatch):
     assert library.preview('data/quoted.csv')['rows'] == [['含,逗号', '多\n行']]
     (data / 'bad.json').write_text('{bad')
     assert library.preview('data/bad.json')['content'] == '{bad'
+
+
+def test_folder_counts_and_finder_boundary(tmp_path, monkeypatch):
+    reports = tmp_path / 'reports'; reports.mkdir()
+    nested = reports / 'nested'; nested.mkdir()
+    (reports / 'one.txt').write_text('one')
+    (nested / 'two.md').write_text('two')
+    (nested / '.secret').write_text('hidden')
+    (reports / 'alias').symlink_to(tmp_path)
+    monkeypatch.setattr(library, 'ROOTS', {'reports': reports})
+    tree = library.listing('reports')
+    assert tree['file_count'] == 2
+    assert tree['items'][0]['file_count'] == 1
+    with patch('workbench_library.subprocess.run') as run:
+        assert library.open_folder('reports/nested')['ok']
+        assert run.call_args.args[0] == ['/usr/bin/open', '-a', 'Finder', str(nested)]
+    for path in ['reports/../outside', 'reports/alias', 'reports/one.txt']:
+        with pytest.raises(WorkbenchError):
+            library.open_folder(path)

@@ -44,10 +44,23 @@ def resolve(path):
     return target
 
 
+def file_count(folder):
+    total = 0
+    for child in folder.iterdir():
+        if hidden(child.name) or child.is_symlink():
+            continue
+        if child.is_dir():
+            total += file_count(child)
+        elif child.is_file():
+            total += 1
+    return total
+
+
 def entry(path, file):
     stat = file.stat()
     return {'path': path, 'name': file.name, 'directory': file.is_dir(),
-            'size': stat.st_size if file.is_file() else None, 'mtime': stat.st_mtime}
+            'size': stat.st_size if file.is_file() else None, 'mtime': stat.st_mtime,
+            **({'file_count': file_count(file)} if file.is_dir() else {})}
 
 
 def listing(path=''):
@@ -58,7 +71,8 @@ def listing(path=''):
         raise WorkbenchError('not_directory', '请选择文件夹', 400)
     files = [p for p in folder.iterdir() if not hidden(p.name) and not p.is_symlink() and (p.is_file() or p.is_dir())]
     files.sort(key=lambda p: (not p.is_dir(), p.name.casefold()))
-    return {'items': [entry(path.rstrip('/') + '/' + p.name, p) for p in files]}
+    return {'items': [entry(path.rstrip('/') + '/' + p.name, p) for p in files],
+            'file_count': file_count(folder)}
 
 
 def file_path(path):
@@ -107,3 +121,22 @@ def open_local(path):
     except (OSError, subprocess.SubprocessError) as exc:
         raise WorkbenchError('open_failed', '本地打开失败，请下载原文件', 400) from exc
     return {'ok': True}
+
+
+def open_directory(folder):
+    if not folder.is_dir():
+        raise WorkbenchError('not_found', '目录尚未生成，请等待采集开始后刷新', 404)
+    if sys.platform != 'darwin':
+        raise WorkbenchError('open_unsupported', 'Finder 打开仅支持 macOS', 400)
+    try:
+        subprocess.run(['/usr/bin/open', '-a', 'Finder', str(folder)], check=True, capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise WorkbenchError('open_failed', 'Finder 打开失败，请重试', 400) from exc
+    return {'ok': True}
+
+
+def open_folder(path):
+    folder = resolve(path)
+    if not folder.is_dir():
+        raise WorkbenchError('not_directory', '请选择文件夹', 400)
+    return open_directory(folder)

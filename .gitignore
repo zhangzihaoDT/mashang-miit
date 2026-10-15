@@ -46,3 +46,6 @@ cookies*
 web/node_modules/
 # Application shell is source, not a generated report.
 !web/index.html
+
+# Shared application brand asset.
+!web/brand.png
