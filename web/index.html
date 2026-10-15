@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>mashang-miit</title><link rel="icon" type="image/gif" sizes="512x512" href="/favicon.gif"><link rel="stylesheet" href="/styles.css"></head>
+<body><div class="app-shell">
+<header class="app-header"><span class="mark">MIIT / 01</span><div class="brand-copy"><h1>mashang-miit</h1><p>工信部公告 · 采集与报告</p></div><span class="concept-badge">界面方案</span></header>
+<section class="capture"><form id="capture"><label for="url">公告来源</label><div class="url-row"><input id="url" type="url" required placeholder="粘贴工信部公告 URL…"></div><div class="capture-actions"><p id="notice" role="status">统一采集入口，始终位于页面顶部</p><button id="submit">开始采集</button></div></form></section>
+<main class="workspace"><aside class="sidebar"><nav class="primary-nav" aria-label="工作区"><button data-scope="tasks" aria-pressed="true">采集任务</button><button data-scope="reports" aria-pressed="false">Reports</button></nav><div class="list-head"><span id="count">任务及产出文件</span><button id="refresh" aria-label="刷新">↻</button></div><div id="list"></div></aside><section id="preview" class="task-preview" aria-label="任务详情与产出"></section></main>
+<footer class="prototype-disclaimer">交互原型：展示建议的信息层级，不代表真实任务记录或实际文件名。采集按钮不连接后端。</footer>
+</div><script src="/vendor/markdown.js"></script><script src="/app.js"></script><script src="/library.js"></script></body></html>

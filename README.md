@@ -141,15 +141,16 @@ make test       # 冒烟：所有脚本 --help 可用
 
 审计、迁移路径和逐阶段验收见 [实施计划](workflow/v1_implementation_plan.md)，历史资产比较清单见 [迁移清单](reports/miit_migration_inventory.json)。清单记录应用开发前的迁移状态，不是运行数据的发布版本。
 
-```bash
-make workbench-replay  # 第 409 批真实归档离线回放，不访问官方网络
-# 浏览器打开 http://127.0.0.1:8787
-# 输入链接：
-# https://www.miit.gov.cn/jgsj/zbys/wjfb/art/2026/art_4951b91392884d049c623d59387f6172.html
-```
+### Hub Runtime 接入
 
-`make workbench` 为实时采集模式，仅在用户提交 URL 后执行网络采集。V1.0 支持 MIIT 文件发布栏目正式公告详情链接；其他来源、车型链接返回明确错误。服务固定监听 loopback，同一运行目录只允许一个进程。运行数据在 `runs/workbench/`，包含 SQLite 任务账本、候选快照和任务隔离证据，已加入忽略规则；备份时应停止服务后完整复制该目录。
+MIIT 作为独立本地服务注册到 mashang-hub Runtime。Hub 通过 `scripts/dev.sh` 控制工作台启动/停止，并在服务在线后打开独立 MIIT 操作台；任务、数据、报告及其目录结构仍由本仓库维护。Hub 默认入口为 `http://127.0.0.1:8790`，健康探测与浏览器入口可分别通过 Worker 环境变量 `MASHANG_MIIT_URL`、`MASHANG_MIIT_UI_URL` 配置；项目根目录可通过 `MASHANG_MIIT_ROOT` 覆盖。直接运行 `scripts/dev.sh start|stop|status|logs` 可在本地管理服务；脚本只停止 PID 记录指向的进程，或命令签名和监听端口均匹配的 MIIT 服务，不会操作其他端口占用进程。
 
-客户端 `POST /api/miit/tasks` 提交 `url` 和 `idempotency_key`，返回持久 task_id；GET 同路径查看最近 100 条任务。`GET /api/miit/inbox`、`candidates/{id}`、`evidence/{id}` 提供候选和证据预览；`POST tasks/{id}/retry` 使用新幂等键创建关联重试。队列在服务运行时自动消费；进程中断后 running 任务变为明确失败，queued 任务继续执行。API 是本地 V1 开发契约，完整分页、审核发布、资料库及导出待 V1.1。
+### 界面原型与 Reports
 
-候选保留全量来源行，质量问题单列；候选的 confirmed 是官方阶段，pending_review 是人工核验状态。当前不提供审核和入库接口，不调用 canonical writer，不把历史 CSV 自动标记成已审核资料库。第 409 批离线回放验证来源解析一致性；实时网络、DOC 转换及 Service 回归尚需独立验收。
+当前浏览器界面是交互原型：顶部保留公告来源入口，但“开始采集”不连接后端；「采集任务」中的第 409、410 批及新任务卡片均为示意，不读取任务账本，也不代表真实任务记录。候选、证据与 `data/` 关联产物目前由后端 API 支持，历史 data 文件缺少任务关联时不推断归属。`make workbench-replay` 仍可用于第 409 批后端离线回放验收，不会把回放记录伪装成界面中的真实任务。
+
+「Reports」按真实目录浏览 `reports/`，不把整个 `data/` 合并为资料库，也不强行关联公告批次与单次任务。保留文件夹展开、刷新、Markdown（含 GFM 表格）、CSV、JSON、TXT、HTML 和 JPG/PNG/GIF/WebP 图片预览，以及下载和 macOS 本地打开。HTML 在隔离 iframe 中展示，脚本不运行；CSV 最多预览 500 行，超过 8 MiB 的文本提示下载原文件。文件交互复用与 Markdown bundle 重建方法见 [web/REUSE.md](web/REUSE.md)。
+
+直接后端工作台仍可用 `make workbench` 或 `make workbench-replay` 启动，默认端口为 8787；Hub 管理的独立操作台由 `scripts/dev.sh` 启动在 8790。V1.0 支持 MIIT 文件发布栏目正式公告详情链接；其他来源、车型链接返回明确错误。运行数据保存在 `runs/workbench/`，包括 SQLite 任务账本、候选快照和任务隔离证据；备份时应停止服务后完整复制该目录。
+
+客户端 `POST /api/miit/tasks` 提交 `url` 和 `idempotency_key`，返回持久 task_id；GET 同路径查看最近 100 条任务。`GET /api/miit/inbox`、`candidates/{id}`、`evidence/{id}` 提供候选和证据预览；`POST tasks/{id}/retry` 使用新幂等键创建关联重试。队列在服务运行时自动消费；进程中断后 running 任务变为明确失败，queued 任务继续执行。当前不提供审核和入库接口，不调用 canonical writer，不把历史 CSV 自动标记成已审核记录。

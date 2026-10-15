@@ -6,11 +6,12 @@ import logging
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs, unquote, quote
 
 from miit_paths import WORKBENCH_DIR, WORKBENCH_WEB_DIR, MIIT_FORMAL_DIR
 from workbench_source import WorkbenchError, collect
 from workbench_store import Store
+import workbench_library as library
 
 
 class Worker:
@@ -39,14 +40,16 @@ class Worker:
 
 def handler(store, root):
     class Handler(BaseHTTPRequestHandler):
-        def send(self, data, status=200, content_type='application/json; charset=utf-8'):
+        def send(self, data, status=200, content_type='application/json; charset=utf-8', headers=None, csp=None):
             body = json.dumps(data, ensure_ascii=False).encode() if isinstance(data, (dict, list)) else data
             self.send_response(status)
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Cache-Control', 'no-store')
-            self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; frame-ancestors 'none'")
+            self.send_header('Content-Security-Policy', csp or "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; frame-ancestors 'none'")
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -65,9 +68,11 @@ def handler(store, root):
                 if post and self.headers.get('Origin') not in (None, f'http://{host}'):
                     raise WorkbenchError('invalid_origin', '来源不受支持', 403)
                 path = urlsplit(self.path).path
-                if not post and path in {'/', '/app.js', '/styles.css'}:
+                if not post and path in {'/', '/app.js', '/library.js', '/vendor/markdown.js', '/styles.css', '/favicon.gif'}:
                     name = 'index.html' if path == '/' else path[1:]
-                    content_type = {'index.html': 'text/html', 'app.js': 'text/javascript', 'styles.css': 'text/css'}[name]
+                    content_type = {'index.html': 'text/html', 'app.js': 'text/javascript', 'library.js': 'text/javascript', 'vendor/markdown.js': 'text/javascript', 'styles.css': 'text/css', 'favicon.gif': 'image/gif'}[name]
+                    if name == 'favicon.gif':
+                        return self.send((WORKBENCH_WEB_DIR / name).read_bytes(), content_type=content_type)
                     return self.send((WORKBENCH_WEB_DIR / name).read_bytes(), content_type=content_type + '; charset=utf-8')
                 body = {}
                 if post:
@@ -79,6 +84,25 @@ def handler(store, root):
                     body = json.loads(self.rfile.read(size))
                     if not isinstance(body, dict):
                         raise WorkbenchError('invalid_body', '需要 JSON 对象')
+                query = parse_qs(urlsplit(self.path).query)
+                library_path = query.get('path', [''])[0]
+                if not post and path == '/api/miit/library/tree':
+                    return self.send(library.listing(library_path))
+                if not post and path == '/api/miit/library/preview':
+                    return self.send(library.preview(library_path))
+                if post and path == '/api/miit/library/open':
+                    return self.send(library.open_local(body.get('path', '')))
+                prefix = '/api/miit/library/file/'
+                if not post and path.startswith(prefix):
+                    file = library.file_path(unquote(path[len(prefix):]))
+                    download = query.get('download') == ['1']
+                    mime = library.IMAGE_TYPES.get(file.suffix.lower(), 'text/plain; charset=utf-8')
+                    if file.suffix.lower() in {'.html', '.htm'}:
+                        mime = 'text/html; charset=utf-8'
+                    extra = {'Content-Disposition': "attachment; filename*=UTF-8''" + quote(file.name)} if download else {}
+                    # HTML can render styles/images, but cannot execute scripts or access parent UI.
+                    policy = "sandbox; default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"
+                    return self.send(file.read_bytes(), content_type=mime, headers=extra, csp=policy)
                 if path == '/api/miit/tasks':
                     if post:
                         if body.get('capture_type', 'auto') not in ('auto', 'formal_batch'):

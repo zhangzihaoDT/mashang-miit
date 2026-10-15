@@ -1,55 +1,138 @@
-// Interaction structure references mashang-fetch FetchBar/FileSidebar/PreviewPane.
-const $ = s => document.querySelector(s);
-let scope = 'inbox', activeTask = null, generation = 0;
-const node = (tag, value, cls) => { const n = document.createElement(tag); n.textContent = value; if (cls) n.className = cls; return n; };
+// Task examples are intentionally illustrative; Reports continue to load real files.
+const $ = selector => document.querySelector(selector);
+let scope = 'tasks';
+let generation = 0;
+let selectedDemoTask = 'batch-409';
+let selectedDemoSection = 'details';
+
+const node = (tag, value, cls) => {
+  const element = document.createElement(tag);
+  element.textContent = value;
+  if (cls) element.className = cls;
+  return element;
+};
+
 async function api(path, body) {
-  const response = await fetch('/api/miit/' + path, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {});
-  const data = await response.json(); if (!response.ok) throw Error(data.message); return data;
+  const response = await fetch('/api/miit/' + path, body ? {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+  } : {});
+  const data = await response.json();
+  if (!response.ok) throw Error(data.message);
+  return data;
 }
+
 function notice(message) { $('#notice').textContent = message; }
-function showTask(task) {
-  activeTask = task.task_id;
-  const box = $('#preview'); box.replaceChildren(node('h2', '采集任务'), node('p', task.task_id), node('p', task.status), node('p', task.url));
-  if (task.error) box.append(node('pre', JSON.stringify(JSON.parse(task.error), null, 2)));
-  if (task.retry_of) box.append(node('p', '重试自：' + task.retry_of));
-  if (task.status === 'failed' || task.status === 'partial_success') {
-    const retry = node('button', '重新采集'); retry.onclick = async () => { retry.disabled = true; try {await api('tasks/' + task.task_id + '/retry', {idempotency_key: crypto.randomUUID()}); await refresh();} catch(e) {notice(e.message);} finally {retry.disabled = false;} }; box.append(retry);
+
+const demoTasks = [
+  {id: 'batch-409', title: '第 409 批', subtitle: '历史批次 · 示意', status: '执行状态 · 示意'},
+  {id: 'batch-410', title: '第 410 批', subtitle: '历史批次 · 示意', status: '历史任务 · 示意'},
+  {id: 'new-task', title: '新采集任务', subtitle: '示意状态', status: '等待执行 · 示意'},
+];
+
+function renderDemoTaskList() {
+  const list = $('#list');
+  list.replaceChildren();
+  for (const task of demoTasks) {
+    const card = node('article', '', 'demo-task' + (task.id === selectedDemoTask ? ' selected' : ''));
+    const select = node('button', '', 'demo-task-select');
+    select.setAttribute('aria-pressed', String(task.id === selectedDemoTask));
+    select.append(node('span', task.id === selectedDemoTask ? '⌄' : '›', 'task-caret'));
+    const copy = node('span', '', 'demo-task-copy');
+    copy.append(node('strong', task.title), node('small', task.subtitle));
+    select.append(copy);
+    select.onclick = () => {
+      selectedDemoTask = task.id;
+      selectedDemoSection = 'details';
+      renderDemoTask();
+    };
+    card.append(select);
+    if (task.id === selectedDemoTask) {
+      const actions = node('div', '', 'demo-task-actions');
+      const outputs = node('button', '▱　data/ · 采集及加工产物', 'demo-task-action');
+      outputs.setAttribute('aria-pressed', String(selectedDemoSection === 'outputs'));
+      outputs.onclick = () => { selectedDemoSection = 'outputs'; renderDemoTask(); };
+      const logs = node('button', '▤　任务详情与执行记录', 'demo-task-action');
+      logs.setAttribute('aria-pressed', String(selectedDemoSection === 'details'));
+      logs.onclick = () => { selectedDemoSection = 'details'; renderDemoTask(); };
+      actions.append(outputs, logs);
+      card.append(actions);
+    }
+    list.append(card);
   }
-  if (task.candidate_id) { const open = node('button','查看候选'); open.onclick = () => showCandidate(task.candidate_id).catch(e => notice(e.message)); box.append(open); }
 }
-async function showCandidate(id) {
-  activeTask = null; const token = ++generation; const data = await api('candidates/' + id); if (token !== generation) return;
-  const p = data.payload, box = $('#preview'); box.replaceChildren(node('span', '待核验 · revision ' + data.revision, 'eyebrow'), node('h2', '第 ' + p.batch_no + ' 批 · 正式公告'), node('p', p.rows.length + ' 条来源记录 / ' + p.issues.length + ' 条记录需处理 · ' + (p.capture_mode === 'archive_replay' ? '历史证据回放' : '实时采集')));
-  const source = node('a', '打开官方来源'); source.href = p.source_url; source.target='_blank'; source.rel='noreferrer'; box.append(source);
-  box.append(node('p', '官方阶段：' + p.stage + '；核验状态：' + data.review_status), node('p', '内容摘要：' + data.content_hash, 'hash'));
-  const tabs = node('div', '', 'tabs'), content = node('div');
-  const structured = node('button','结构化数据'); structured.onclick = () => {content.replaceChildren(node('pre',JSON.stringify(p.rows, null, 2)));}; tabs.append(structured);
-  const issues = node('button','质量问题'); issues.onclick = () => content.replaceChildren(node('pre', JSON.stringify(p.issues, null, 2))); tabs.append(issues);
-  for (const evidence of data.evidence) {
-    const button = node('button', '原文 · ' + evidence.metadata.name);
-    button.onclick = async () => { try {
-      if (evidence.metadata.kind === 'doc') { const a = node('a','下载原始附件'); a.href='/api/miit/evidence/' + evidence.evidence_id; a.download='road.doc'; content.replaceChildren(a); return; }
-      const response = await fetch('/api/miit/evidence/' + evidence.evidence_id); if (!response.ok) throw Error('证据读取失败'); content.replaceChildren(node('pre', await response.text()));
-    } catch(e) {notice(e.message);} }; tabs.append(button);
+
+function renderDemoTask() {
+  renderDemoTaskList();
+  const task = demoTasks.find(item => item.id === selectedDemoTask) || demoTasks[0];
+  const preview = $('#preview');
+  preview.className = 'task-preview';
+  preview.replaceChildren();
+
+  const title = node('div', '', 'preview-title');
+  title.append(node('span', '▤', 'preview-icon'), node('h2', '任务详情与产出'));
+  preview.append(title, node('div', '', 'preview-divider'));
+
+  const heading = node('div', '', 'demo-detail-heading');
+  heading.append(node('h3', task.title), node('span', '示意', 'demo-badge'));
+  preview.append(heading);
+
+  const section = node('section', '', 'demo-detail-section');
+  if (selectedDemoSection === 'outputs') {
+    section.append(node('h4', 'data/ · 采集及加工产物'));
+    section.append(node('p', '此处展示与当前任务明确关联的文件及结构化数据。示意页面不绑定或虚构实际文件。'));
+    section.append(node('p', '历史数据缺少任务关联记录时，不推断文件归属。', 'detail-note'));
+  } else {
+    section.append(node('h4', '执行状态 / 数据产出'));
+    section.append(node('p', task.status));
+    section.append(node('p', '任务详情区用于呈现执行记录、采集候选，以及 data/ 中能够明确关联的文件与结构化数据。'));
+    section.append(node('div', '', 'demo-detail-rule'));
+    section.append(node('p', '历史批次 · 候选结果与执行记录仅作信息层级示意，不对应真实运行数据。', 'detail-note'));
   }
-  box.append(tabs, content); structured.click();
+  preview.append(section);
 }
+
 async function refresh() {
-  const current = scope;
-  if (scope === 'library') { $('#list').replaceChildren(node('p','核验入库后将在此展示。')); $('#count').textContent = '资料库'; return; }
-  const data = await api(scope === 'tasks' ? 'tasks' : 'inbox'); if (current !== scope) return;
-  $('#count').textContent = (scope === 'tasks' ? '最近任务 ' : '待核验候选 ') + data.items.length + ' / 最多 100';
-  if (scope === 'tasks' && activeTask) { const task = data.items.find(t => t.task_id === activeTask); if (task) showTask(task); }
-  const list = $('#list'); list.replaceChildren();
-  if (!data.items.length) list.append(node('p','暂无记录。'));
-  for (const item of data.items) {
-    const button = node('button', '', 'item'); button.append(node('strong', scope === 'tasks' ? item.status : '待核验候选'), node('small', item.task_id.slice(0,12) + ' · ' + new Date(item.created_at).toLocaleString()));
-    button.onclick = () => { generation++; activeTask = null; if(scope === 'tasks') showTask(item); else showCandidate(item.candidate_id).catch(e=>notice(e.message)); }; list.append(button);
+  if (scope === 'reports') {
+    await refreshReports();
+    return;
   }
+  $('#count').textContent = '任务及产出文件';
+  renderDemoTask();
 }
-$('#capture').onsubmit = async e => {e.preventDefault(); $('#submit').disabled = true; try {const task = await api('tasks',{url:$('#url').value.trim(), idempotency_key:crypto.randomUUID()}); notice('任务已创建：' + task.task_id); scope='tasks'; setNav(); await refresh(); showTask(task);} catch(e) {notice(e.message);} finally {$('#submit').disabled=false;} };
-function setNav() {document.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===scope)));}
-document.querySelectorAll('[data-scope]').forEach(b => b.onclick=()=>{scope=b.dataset.scope; activeTask = null; generation++; setNav(); $('#preview').replaceChildren(node('h2',scope==='library'?'资料库将在核验入库后开放':'选择记录查看预览')); refresh().catch(e=>notice(e.message));});
-$('#refresh').onclick = () => refresh().catch(e=>notice(e.message));
-refresh().catch(e=>notice(e.message));
-setInterval(()=>refresh().catch(e=>notice(e.message)),3000);
+
+$('#capture').onsubmit = event => {
+  event.preventDefault();
+  notice('交互原型：采集按钮不连接后端。');
+};
+
+function setNav() {
+  document.querySelectorAll('[data-scope]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.scope === scope));
+  });
+}
+
+function resetPreview(message, eyebrow) {
+  const preview = $('#preview');
+  preview.className = 'task-preview empty-preview';
+  preview.replaceChildren(node('span', eyebrow, 'eyebrow'), node('h2', message));
+}
+
+document.querySelectorAll('[data-scope]').forEach(button => {
+  button.onclick = () => {
+    if (scope === button.dataset.scope) return;
+    scope = button.dataset.scope;
+    generation++;
+    setNav();
+    if (scope === 'reports') {
+      notice('Reports 按实际 reports/ 文件夹结构浏览。');
+      resetPreview('选择报告查看预览', 'REPORTS / FILES');
+    } else {
+      notice('交互原型：示意任务不代表真实运行记录。');
+    }
+    refresh().catch(error => notice(error.message));
+  };
+});
+
+$('#refresh').onclick = () => refresh().catch(error => notice(error.message));
+setNav();
+refresh().catch(error => notice(error.message));

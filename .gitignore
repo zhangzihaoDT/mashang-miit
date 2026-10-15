@@ -41,3 +41,8 @@ cookies*
 *credentials*
 *secret*
 *token*
+
+# Optional Markdown preview bundle rebuild dependencies.
+web/node_modules/
+# Application shell is source, not a generated report.
+!web/index.html
