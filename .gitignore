@@ -1,0 +1,43 @@
+.venv/
+.env
+.env.*
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+*.egg-info/
+
+# Local runtime state and task evidence. Never commit SQLite, locks, raw HTML,
+# downloaded attachments, cookies, or worker output.
+runs/**
+!runs/README.md
+
+# Historical/raw/structured datasets and downloaded source evidence stay local.
+# Keep directory-level documentation and schemas versioned where present.
+data/**
+!data/**/
+!data/**/README.md
+
+# Generated reports and screenshots may contain source excerpts or local state.
+reports/**
+!reports/README.md
+!reports/*_validation.md
+
+# Local browser/build artifacts.
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.doc
+*.docx
+*.pdf
+*.html
+*.png
+*.jpg
+*.jpeg
+*.webp
+cookies*
+*cookie*
+*credentials*
+*secret*
+*token*
