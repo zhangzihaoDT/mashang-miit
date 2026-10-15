@@ -1,167 +1,125 @@
 # mashang-miit
 
-汽车公告数据资产业务应用。独立仓库，与 mashang-fetch、mashang-service 平级。
+汽车公告数据资产业务应用：获取工信部汽车公告，归档原始证据，解析车型参数，并为汽车行业研究提供可追溯的数据与报告。
 
-## 长期产品定位
+项目独立维护采集、解析和数据契约，可通过本地工作台使用，也可作为独立服务接入 [mashang-hub](https://github.com/zhangzihaoDT/mashang-hub)。与 `mashang-fetch`、`mashang-service` 平级，不依赖它们的源码、虚拟环境或配置。
 
-`mashang-miit` 负责维护汽车公告数据资产的完整业务闭环：从官方来源获取、原始证据归档、解析与车型身份治理，到候选核验、版本修订、正式入库、检索导出和稳定数据消费契约。采集脚本和 V1 工作台只是实现这个业务应用的起点；数据资产的可追溯性、质量、生命周期和对下游服务的可用性是长期产品目标。
+## 开始使用
 
-开发交接与工作台接口方案见 [V1 handoff](workflow/miit_workbench_v1_handoff.md)；Hub 已通过 Runtime 接入独立工作台。
+需要 Python 3.11 或以上版本。Finder 打开功能仅支持 macOS；部分 `.doc` 附件转换使用 macOS `textutil`，并保留备用提取方式。
 
-## 独立运行
+在仓库根目录安装依赖并启动：
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
+./scripts/dev.sh start
+```
+
+浏览器打开 [本地工作台](http://127.0.0.1:8790)。服务管理：
+
+```bash
+./scripts/dev.sh status
+./scripts/dev.sh logs
+./scripts/dev.sh stop
+./scripts/dev.sh restart
+```
+
+修改后端后需重启服务，前端页面刷新后加载更新。
+
+## 本地工作台
+
+工作台沿用 Fetch 的界面结构：顶部采集入口，左侧任务与报告导航，右侧详情预览。
+
+### 采集任务
+
+在顶部粘贴 **MIIT 文件发布栏目正式公告详情链接**并开始采集，页面会自动选中新任务。左侧展示最近 100 条真实任务，页面可见时每 2 秒更新状态。
+
+任务详情提供来源链接、执行状态、时间、错误信息，以及完成后生成的候选记录、质量与作用域标记、公告元数据和来源证据。支持候选快照下载、证据预览与下载、失败关联重试，以及在 Finder 中打开当前任务的产物目录。任务角标表示最近 100 条记录中的任务数。
+
+当前工作台尚不支持公示页、车型详情或 EIDC 链接；这些来源的既有采集能力由 CLI 管线提供。采集完成的候选仍待核验，**官方 confirmed 阶段不等于人工已审核，也不代表已正式入库**。
+
+### Reports
+
+直接浏览本机 `reports/` 目录，支持文件夹展开、刷新、下载、Finder 打开目录和默认应用打开文件。预览支持 Markdown（含 GFM 表格）、CSV、JSON、TXT、HTML 和常见图片格式。
+
+Reports 角标表示整个目录的递归可见文件数，各子目录显示自身的递归文件数；不计文件夹、隐藏项或符号链接。HTML 使用隔离预览且不运行脚本；CSV 最多预览 500 行，超过 8 MiB 的文本可下载查看。
+
+Reports 与采集任务分别浏览。历史报告和 `data/` 文件缺少任务关联时，不推断归属；不新增 Inbox 文件夹或 `data/library/`。
+
+## 数据与采集管线
+
+CLI 保留从官方来源到结构化数据和报告的处理链路：
+
+```text
+官方公告 / 公示
+  → 发现与采集
+  → 原始页面、附件、车型详情归档
+  → 附件解析与参数补充
+  → 车型身份、分类及来源合并
+  → canonical 车型与参数表
+  → 宽表与报告
+```
+
+支持的来源及优先级：
+
+| 来源 | 官方阶段 | 作用 |
+| --- | --- | --- |
+| MIIT 主站正式公告 | confirmed | 最终确认主源 |
+| EIDC 正式公告 | confirmed | 历史与备用确认来源 |
+| MIIT 主站拟发布公示 | proposed | 提前发现及丰富车型参数 |
+
+合并优先级为 **MIIT formal > EIDC formal > Gov proposed**。正式公告字段优先，公示详情补缺。来源归档保留全量道路机动车辆，canonical 只保留有效申报型号的乘用车。车型身份按批次与型号确定，不假设型号跨批次全局唯一。
+
+`data/vehicle_parameters/` 中的 `product_master` 和 `vehicle_parameter` 是现有结构化消费出口。当前本地历史基线覆盖 401–411 批，共 930 条乘用车记录；这是历史数据快照，不是工作台已核验发布的记录数。
+
+CLI 命令见 [命令速查](workflow/commands.md)，来源规则、身份和合并契约见 [管线说明](workflow/pipeline.md)。CLI 业务命令可能采集网络数据或重写正式产物，不用于软件验证。
+
+## 项目结构与存储
+
+| 路径 | 内容 |
+| --- | --- |
+| `scripts/` | 采集、解析、数据构建、报告及工作台后端 |
+| `web/` | 工作台界面与品牌资源 |
+| `workflow/` | 配置、数据契约、来源规则与设计方案 |
+| `data/` | 本地原始证据、中间数据与结构化数据 |
+| `reports/` | 可浏览的报告及分析产物 |
+| `runs/` | 管线运行记录与工作台持久状态 |
+
+路径统一由 `scripts/miit_paths.py` 解析。工作台 SQLite 账本位于 `runs/workbench/`，任务证据位于 `runs/workbench/tasks/`；新增采集与历史 canonical 数据隔离。
+
+Git 主要版本化实现、文档与契约，**克隆仓库不等于获得本机完整数据资产**。大部分数据、报告、运行状态及原始附件被忽略，需单独备份和恢复。备份工作台时应先停止服务，再完整复制 `runs/workbench/`。不提交凭证、cookies、浏览器 profile 或虚拟环境。
+
+## Hub 与下游集成
+
+Hub Runtime 提供 MIIT 服务状态、启停、日志和独立工作台入口；任务、数据和报告由 MIIT 自己维护。Worker 可配置：
+
+| 环境变量 | 用途 |
+| --- | --- |
+| `MASHANG_MIIT_ROOT` | MIIT 仓库路径 |
+| `MASHANG_MIIT_URL` | 本地健康探测地址，默认 `http://127.0.0.1:8790` |
+| `MASHANG_MIIT_UI_URL` | 可选的浏览器访问地址，与健康探测分别配置 |
+
+工作台 API 提供持久任务创建与查询、幂等提交、关联重试、候选和证据读取；接口设计见 [工作台方案](workflow/miit_workbench_v1_handoff.md)，当前行为以实现为准。
+
+人工审核、事务入库、不可变修订及版本化数据发布仍待实现；Service 消费 MIIT 发布快照的对接也尚未完成。后续设计见 [实施与消费契约](workflow/v1_implementation_plan.md)。
+
+## 开发与验证
+
+```bash
 make test
-make miit-scan BATCH=411
 ```
 
-运行依赖仅声明在本仓库，不复用 Service 的环境。现阶段保留原有 CLI 管线；工作台已支持任务、候选与证据 API，人工核验和正式发布待后续实现。`.doc` 转换沿用现有解析器，部分平台路径使用 macOS `textutil` 或系统转换工具。
+测试覆盖解析、来源与身份规则、任务持久化、幂等和恢复、HTTP API、文件访问边界及目录计数。需要绑定临时本地端口；测试不进行真实采集或重建正式数据。部分离线验收依赖本机历史归档，纯代码检出后需先恢复相应数据。
 
-迁移包含现有 data/、reports/、runs/ 资产；未复制 Service 凭证或虚拟环境。代码远端为 `zhangzihaoDT/mashang-miit`；本地数据与运行证据仍需单独备份。
-
----
-
-# MIIT Gov Proposed Vehicle Intelligence Pipeline
-
-工信部拟公告新车情报模块：**发现拟公告 → 找到关注车型 → 归档车型事实 → 结构化参数 → 补充监管附件 → 生成分析数据与报告。**
-
-管线技术细节见 [workflow/pipeline.md](workflow/pipeline.md)，命令速查见 [workflow/commands.md](workflow/commands.md)。
-
-## 主链路
-
-```
-MIIT.gov.cn
-  → P1 搜索   → data/search_results/ + reports/batch_{batch}/scan_report.html
-  → P2 归档   → data/vehicle_details/ + data/vehicle_photos/ + data/fetch_status/
-  → P3 补充   → data/vehicle_tax/车型清单_第XX批车船税.json
-  → P4 Dataset→ data/wide_tables/wide_table_{batch}.csv
-  → P4.5 统一Dataset → data/vehicle_parameters/product_master + vehicle_parameter
-  → P5 报告   → reports/batch_{batch}/
-```
-
-## EIDC（confirmed 双源）
-
-EIDC 正式公告（miit-eidc.org.cn）作为 confirmed source，与 Gov proposed 共用同一 canonical 出口：
-
-```
-EIDC 官方公告页
-  → 03_fetch_eidc_batch.py（source 抓取/解析/归档）
-  → data/eidc/batch_{N}/（product_list.json + import_manifest + 附件 evidence）
-  → 06_build_vehicle_dataset.py（canonical 唯一入口，与 Gov 共用）
-  → data/vehicle_parameters/（source=eidc, stage=confirmed）
-```
-
-- **source 层**（`eidc_source.py` / `eidc_parser.py`）只回答"官方页面提供了什么"；**领域解释**在 `vehicle_record_builder.py`；**canonical writer** 只有 `06`。
-- 当前 **401-408 全部为 fresh rebuild**（官方公告 → 全量解析 → passenger scope gate），legacy 导入已删除。
-- 分类维度 `vehicle_category` / `analysis_scope` 为派生，不参与 identity。
-- **canonical scope**：Source archive 保留全量道路机动车辆；`vehicle_parameters/` 只落乘用车（`model_code valid AND vehicle_category==passenger_vehicle`）。Gov/EIDC 共用同一 `is_canonical_in_scope()` gate。
-
-**完整技术说明 / source contract / pipeline 细节见 [data/eidc/README.md](data/eidc/README.md)。**
-
-## MIIT 正式公告（primary confirmed）
-
-MIIT 主站正式公告（`miit.gov.cn/jgsj/zbys/wjfb/` 文件发布）作为**最终确认主源**：
-
-```
-miit.gov.cn 文件发布栏目（正式公告，非拟发布公示）
-  → 03_fetch_miit_formal_batch.py（发现/抓取/解析/归档）
-  → data/miit_formal/batch_{N}/（product_list.json + import_manifest，source=miit_gov, stage=confirmed）
-  → 06_build_vehicle_dataset.py（canonical，proposed→confirmed merge）
-  → data/vehicle_parameters/
-```
-
-- 附件与 EIDC 同源（同一 `miit.gov.cn/cms_files` 的「道路机动车辆生产企业及产品（第N批）.doc」），**解析层完全复用** `eidc_parser`。
-- 定位：**MIIT formal = primary final source；EIDC formal = fallback / historical support**。
-- canonical merge 优先级：`MIIT formal > EIDC formal > Gov proposed`；formal 确认字段优先，proposed rich fields 只补缺。
-- 详见 [workflow/pipeline.md](workflow/pipeline.md) 与 [data/miit_formal/README.md](data/miit_formal/README.md)。
-
-## 5 类资产（阅读顺序）
-
-| 目录 | 是什么 | 什么时候打开 |
-|------|--------|--------------|
-| [workflow/](workflow/) | 规则、规划、配置、命令 | **想知道怎么用 / 为什么存在** |
-| [scripts/](scripts/) | 所有可执行脚本（平铺，按管线顺序编号） | **想运行** |
-| [data/](data/) | 获取的数据 + 加工中间数据（按内容命名） | **想看原始 / 中间数据** |
-| [reports/](reports/) | 最终给人看的产出 | **想看结论** |
-| [runs/](runs/) | 每轮运行记录 / 经验沉淀 | **想知道上一批踩了什么坑** |
-
-```
-MIIT/
-├── README.md
-├── Makefile
-├── reports/       ① 最终报告（batch_409/ batch_410/）
-├── data/          ② 事实数据（eidc/ search_results/ vehicle_details/ vehicle_photos/ raw_html/ vehicle_tax/ vehicle_parameters/ wide_tables/ fetch_status/）
-├── scripts/       ③ 执行脚本（01~09 管线 entrypoint 平铺；未编号 = 内部实现/validation）
-├── runs/          ④ 运行记录（batch_409.md batch_410.md eidc_fresh_rebuild.md）
-└── workflow/      ⑤ 规则与配置（pipeline.md commands.md batches.yaml brand_watchlist.yaml model_name_map.json schemas/ docs/）
-```
-
-> 这不是标准 Python package，而是一个**持续运行、持续积累数据、持续形成分析结果的 Research Intelligence Workspace**。
-> 顶层只保留 5 个认知入口；脚本按管线顺序 `01→07` 平铺在 scripts/。
-
-## 快速跑一轮
+浏览器离线验收需要可用的 Playwright 与 Chrome / Chromium：
 
 ```bash
-make miit-run BATCH=410   # P1 搜索 → P2 归档 → P4 宽表 → P4.5 统一Dataset → P5 报告
+PLAYWRIGHT_MODULE=/path/to/playwright \
+CHROME_PATH=/path/to/chrome \
+node scripts/tests/workbench_browser.cjs
 ```
 
-分步见 [workflow/commands.md](workflow/commands.md)；P3 车船税补充为手动步骤。
+该验收使用临时账本与第 409 批本地归档，覆盖提交、状态跟踪、候选与证据、重试、Finder 请求、计数和移动端布局；不设置 `CHROME_PATH` 时使用 Playwright 默认 Chromium。实时官方抓取与 DOC 转换需另行验收，待有效的新公告链接可用后执行。
 
-## 当前状态
-
-已处理 **401–411** 全部批次。统一 Dataset（`data/vehicle_parameters/product_master` + `vehicle_parameter`）当前 **930 车型，全部为乘用车（`vehicle_category == passenger_vehicle`）**：
-- **miit_gov / confirmed**：409（**128** = 49 Gov variant 被正式公告确认 + 79 formal-only，MIIT 正式公告 2026-08-13）
-- **miit_gov / proposed**：410:17 + 411:20（37）
-- **eidc / confirmed**：**401-408 全部 fresh rebuild**，合计 765
-  - 401:117 / 402:135 / 403:43 / 404:84 / 405:63 / 406:94 / 407:96 / 408:133
-
-> **401-408 EIDC fresh/confirmed + 409 MIIT formal confirmed + 410-411 Gov fresh/proposed = 干净版本节点。**
-> canonical 收敛为乘用车业务事实层：Source archive 保留全量道路机动车辆，`vehicle_parameters/` 只落乘用车（`model_code valid AND vehicle_category==passenger_vehicle`）。
-> 409 的 Gov proposed 由 MIIT 正式公告做 **formal confirmation matching**：variant 保留完整申报型号（`XMA6500KREEVA1`），formal 基码只补缺、不覆盖，`stage` 升级为 `confirmed`；无 Gov 详情的正式车型以目录基码独立成行。
-
-观测时间轴：`observation_id = {batch}:{model_code}:{stage}`，401 confirmed → 411 proposed。
-批次索引见 [workflow/docs/公告批次.md](workflow/docs/公告批次.md)，各批运行经验见 [runs/](runs/)。
-
-## 测试
-
-```bash
-make test       # 冒烟：所有脚本 --help 可用
-```
-
-## 后续方向
-
-- 自动发现 pageId；新增 vs 改款自动标识；差异增量通知
-- 跨批次 diff（401 confirmed → 410 proposed）：默认 `analysis_scope='in_scope'`（乘用车）为母体
-- 409/410 Gov proposed 批次 fresh 解析（当前为公示 scan，可补 Gov 官方详情页深度参数）
-- Agent / API 默认消费 `vehicle_parameters/`（乘用车业务层），不再过滤全量
-
-## 本地工作台 V1.0 开发切片
-
-审计、迁移路径和逐阶段验收见 [实施计划](workflow/v1_implementation_plan.md)，历史资产比较清单见 [迁移清单](reports/miit_migration_inventory.json)。清单记录应用开发前的迁移状态，不是运行数据的发布版本。
-
-### Hub Runtime 接入
-
-MIIT 作为独立本地服务注册到 mashang-hub Runtime。Hub 通过 `scripts/dev.sh` 控制工作台启动/停止，并在服务在线后打开独立 MIIT 操作台；任务、数据、报告及其目录结构仍由本仓库维护。Hub 默认入口为 `http://127.0.0.1:8790`，健康探测与浏览器入口可分别通过 Worker 环境变量 `MASHANG_MIIT_URL`、`MASHANG_MIIT_UI_URL` 配置；项目根目录可通过 `MASHANG_MIIT_ROOT` 覆盖。直接运行 `scripts/dev.sh start|stop|status|logs` 可在本地管理服务；脚本只停止 PID 记录指向的进程，或命令签名和监听端口均匹配的 MIIT 服务，不会操作其他端口占用进程。
-
-### 真实任务工作台与 Reports
-
-顶部 URL 输入连接 `POST /api/miit/tasks`，仅支持 MIIT 文件发布栏目的正式公告详情链接。提交后自动切换到「采集任务」并选中新任务；左侧显示账本中最近 100 条真实任务，页面可见时每 2 秒刷新状态。点击任务可查看来源、执行状态、时间和错误；失败任务可创建关联重试。请求结果不确定时再次提交沿用幂等键，成功后再次采集创建独立任务。
-
-任务完成后展示该任务关联的候选记录、质量/作用域标记、公告元数据、候选快照下载和来源证据预览/下载。候选保存在任务账本，证据保存在 `runs/workbench/tasks/`；不新建 Inbox 文件夹或 `data/library/`，不推断历史 data 文件的任务归属。官方 confirmed 阶段与候选待核验状态分开显示；采集完成不会触发审核或 canonical 入库。
-
-「Reports」按真实目录浏览 `reports/`，不把整个 `data/` 合并为资料库，也不强行关联公告批次与单次任务。保留文件夹展开、刷新、Markdown（含 GFM 表格）、CSV、JSON、TXT、HTML 和 JPG/PNG/GIF/WebP 图片预览，以及下载和 macOS 本地打开。HTML 在隔离 iframe 中展示，脚本不运行；CSV 最多预览 500 行，超过 8 MiB 的文本提示下载原文件。文件交互复用与 Markdown bundle 重建方法见 [web/REUSE.md](web/REUSE.md)。
-
-直接后端工作台仍可用 `make workbench` 或 `make workbench-replay` 启动，默认端口为 8787；Hub 管理的独立操作台由 `scripts/dev.sh` 启动在 8790。V1.0 支持 MIIT 文件发布栏目正式公告详情链接；其他来源、车型链接返回明确错误。运行数据保存在 `runs/workbench/`，包括 SQLite 任务账本、候选快照和任务隔离证据；备份时应停止服务后完整复制该目录。
-
-客户端 `POST /api/miit/tasks` 提交 `url` 和 `idempotency_key`，返回持久 task_id；GET 同路径查看最近 100 条任务。`GET /api/miit/inbox`、`candidates/{id}`、`evidence/{id}` 提供候选和证据预览；`POST tasks/{id}/retry` 使用新幂等键创建关联重试。队列在服务运行时自动消费；进程中断后 running 任务变为明确失败，queued 任务继续执行。当前不提供审核和入库接口，不调用 canonical writer，不把历史 CSV 自动标记成已审核记录。
-
-
-### 工作台浏览器离线验收
-
-`PLAYWRIGHT_MODULE=/path/to/playwright CHROME_PATH=/path/to/chrome node scripts/tests/workbench_browser.cjs` 使用临时 SQLite 与第 409 批真实归档测试浏览器提交、自动选中、轮询完成、证据预览和 Reports 切换。未设置 `CHROME_PATH` 时使用 Playwright 默认 Chromium。测试禁止实时采集，不修改正式数据。
-
-P0 验证范围：已通过本地归档离线浏览器流程和后端测试；暂不执行真实 URL 采集管线。待新公告链接可用后再验收实时官方页面抓取及 DOC 转换，不以过期公告链接作为实时验收依据。
-
-工作区数量角标：采集任务为账本最近 100 条记录的数量；Reports 及目录角标为递归可见文件数，不计文件夹、隐藏项或符号链接。Finder 入口可打开 reports/、报告子目录或当前任务的隔离产物目录；任务目录尚未生成时会明确提示。
+文件预览组件维护见 [web/REUSE.md](web/REUSE.md)。
