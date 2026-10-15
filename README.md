@@ -1,6 +1,10 @@
 # mashang-miit
 
-工信部公告 · 获取与整理。独立仓库，与 mashang-fetch、mashang-service 平级。
+汽车公告数据资产业务应用。独立仓库，与 mashang-fetch、mashang-service 平级。
+
+## 长期产品定位
+
+`mashang-miit` 负责维护汽车公告数据资产的完整业务闭环：从官方来源获取、原始证据归档、解析与车型身份治理，到候选核验、版本修订、正式入库、检索导出和稳定数据消费契约。采集脚本和 V1 工作台只是实现这个业务应用的起点；数据资产的可追溯性、质量、生命周期和对下游服务的可用性是长期产品目标。
 
 开发交接与工作台接口方案见 [V1 handoff](workflow/miit_workbench_v1_handoff.md)；Hub 接入尚待开发。
 
